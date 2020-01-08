@@ -7,7 +7,6 @@ client can be optionally run in docker (ofc does not have to, it tries to be imp
 on the other hand the server is better to run in docker
 
 
-
 ## Howto
 
 TBD
@@ -19,7 +18,7 @@ TBD
 ### TODO:
 
 * Encrypt the communication
-* Allow to connect to server's prompt anytime?
+* Allow to connect to server's prompt via TCP?
 * Testing environment with docker-compose
 
 

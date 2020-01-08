@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "5731f6ac9f3f8f6f6ef5f718fda72fd8397fc0b8d0399d53a59d475bcc634729"
+            "sha256": "700556b243b06d12c4ca74fd47507f7bdcba909095c1cf51cc227c0989e02987"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -16,6 +16,13 @@
         ]
     },
     "default": {
+        "aioconsole": {
+            "hashes": [
+                "sha256:498e567805b74c1ecf4501d28e48727e8e77af8d6a0b8f1b7aa9a4842e02743d"
+            ],
+            "index": "pypi",
+            "version": "==0.1.15"
+        },
         "click": {
             "hashes": [
                 "sha256:2335065e6395b9e67ca716de5f7526736bfa6ceead690adf616d925bdc622b13",
@@ -24,13 +31,19 @@
             "index": "pypi",
             "version": "==7.0"
         },
-        "prompt": {
+        "names": {
             "hashes": [
-                "sha256:8a7694b88f8c65188a983315e72582bf42fcc251b97042be1d2a2ad1aa0ebe0e",
-                "sha256:98527de8dc3f0aa29669a39fbffeaf578ba6654dc836f737b6a5c6f9279002b7"
+                "sha256:726e46254f2ed03f1ffb5d941dae3bc67c35123941c29becd02d48d0caa2a671"
             ],
             "index": "pypi",
-            "version": "==0.4.1"
+            "version": "==0.3.0"
+        },
+        "ptable": {
+            "hashes": [
+                "sha256:aa7fc151cb40f2dabcd2275ba6f7fd0ff8577a86be3365cd3fb297cbe09cc292"
+            ],
+            "index": "pypi",
+            "version": "==0.9.2"
         }
     },
     "develop": {}
