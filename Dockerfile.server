@@ -1,0 +1,14 @@
+FROM python:3.7-slim
+
+EXPOSE 6777
+EXPOSE 6767
+
+ENV APP_DIR /usr/python-botnet/
+WORKDIR ${APP_DIR}
+
+COPY requirements.txt setup.py README.md ${APP_DIR}
+COPY src/ ${APP_DIR}/src
+
+RUN pip install .
+
+CMD ["python3.7", "/usr/python-botnet/src/server.py"]
