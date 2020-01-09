@@ -1,7 +1,7 @@
 # PythonBotnet (C&C)
 
 Simple Command and Control (C&C) botnet written asynchronously using asyncio
-in Python3.7. Communication is implemented using websockets.
+in Python3.7. Communication is implemented using unencrypted websockets.
 
 ### Features
 
@@ -9,9 +9,11 @@ in Python3.7. Communication is implemented using websockets.
 * Enable reverse-shell on a specific bot client
 * Bot client authentication using password
 
+*See [planned features](#to-be-done)*
+
 ### Example
 
-TBD
+![](demo/demo-v1.gif)
 
 ## Getting started
 
@@ -85,6 +87,8 @@ Options:
   -p, --port INTEGER         Port where the running c&c listens
   --help                     Show this message and exit.
 ```
+*Note: password for client authentication needs to be written directly to 
+[src/client.py](src/client.py). (Default values match)*
 
 ## To be done:
 
