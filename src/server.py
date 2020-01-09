@@ -3,7 +3,7 @@ from typing import List, Union
 import click
 from prettytable import PrettyTable
 
-from bot_client import Bot
+from bot import Bot
 from utils import hash_sha256, is_num, Id, configure_logging
 
 import asyncio
