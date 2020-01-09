@@ -25,14 +25,14 @@ in Python3.7. Communication is implemented using unencrypted websockets.
 The easiest way to test the botnet is to run prepared 
 [docker-compose.yml](docker-compose.yml) file. To build images and run 
 docker-compose in detached mode:
-```bash
+```
 $ docker-compose build
 $ docker-compose up -d
 ```
 
 To connect to the control panel, websocket cli client is needed (e.g. 
 [wscat](https://www.npmjs.com/package/wscat))
-```bash
+```
 $ wscat -c localhost:6767
 Connected (press CTRL+C to quit)
 < Enter: 
@@ -47,14 +47,14 @@ Connected (press CTRL+C to quit)
 ### Run locally
 
 Project can be also installed locally:
-```bash
+```
 $ pip install . 
 ```
 
 Then run control panel server, bot client and websocket cli client in separated 
  terminals:
 
-```bash
+```
 $ python3.7 src/server.py
 $ python3.7 src/client.py
 $ wscat -c localhost:6767
@@ -64,7 +64,7 @@ $ wscat -c localhost:6767
 ### Configuration
 
 #### Control panel server
-```bash
+```
 $ python3.7 server.py --help
 Usage: server.py [OPTIONS]
 
@@ -78,7 +78,7 @@ Options:
 ```
 
 #### Botnet client
-```bash
+```
 $ python3.7 client.py --help
 Usage: client.py [OPTIONS]
 
