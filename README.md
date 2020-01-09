@@ -83,9 +83,12 @@ $ python3.7 client.py --help
 Usage: client.py [OPTIONS]
 
 Options:
-  -s, --server_address TEXT  Ip address or host of a running c&c
-  -p, --port INTEGER         Port where the running c&c listens
-  --help                     Show this message and exit.
+  -s, --server_address TEXT       Ip address or host of a running c&c
+  -p, --port INTEGER              Port where the running c&c listens
+  -i, --connection_interval INTEGER
+                                  Interval in seconds in which client tries to
+                                  connect to c&c server
+  --help                          Show this message and exit.
 ```
 *Note: password for client authentication needs to be written directly to 
 [src/client.py](src/client.py). (Default values match)*
