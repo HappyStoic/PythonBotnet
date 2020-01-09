@@ -88,18 +88,32 @@ class CommandControl:
     async def execute_commands(self, ws: WebSocketConn, idxs: List[int]):
         await ws.send("Enter command:")
         cmd = await ws.recv()
-        for idx in idxs:
-            cur_bot = self.ctx.get_bot(idx)
-            stdout = await cur_bot.send_command(cmd)
 
+        async def exec_command(bot_idx: int):
+            cur_bot = self.ctx.get_bot(bot_idx)
+            if not cur_bot:
+                await ws.send(f"Bot {bot_idx} does not exist")
+                return
+
+            stdout = await cur_bot.send_command(cmd)
             if stdout is False:
                 self.ctx.remove_bot_client(cur_bot)
-                await ws.send(f"Connection with bot {cur_bot} was closed...")
+                await ws.send(
+                    f"Connection with bot {cur_bot} was closed...")
             else:
-                stdout = f"Bot {idx}:\n{stdout}"
+                stdout = f"Bot {bot_idx}:\n{stdout}"
                 await ws.send(stdout)
 
-    async def start_bash(self, ws: WebSocketConn, bot: Bot):
+        # Execute all commands simultaneously in case it takes long time to
+        # finish
+        await asyncio.gather(*[exec_command(i) for i in idxs])
+
+    async def start_bash(self, ws: WebSocketConn, bot_idx: int):
+        bot = self.ctx.get_bot(bot_idx)
+        if not bot:
+            await ws.send(f"Bot {bot_idx} does not exist")
+            return
+
         while True:
             cmd = await ws.recv()
             if cmd.strip("\n").lower() == "exit":
@@ -118,7 +132,11 @@ class CommandControl:
         try:
             while True:
                 await cli_ws.send(CLI_OPTIONS)
-                choice = (await cli_ws.recv())
+
+                # To not care about empty lines
+                choice = None
+                while not choice:
+                    choice = (await cli_ws.recv())
 
                 if choice == "0":
                     await cli_ws.send(self.ctx.get_database_summary())
@@ -132,8 +150,7 @@ class CommandControl:
 
                 # Start bash with this client
                 if len(nums) == 1 and nums[0]:
-                    bot = self.ctx.get_bot(int(nums[0]))
-                    await self.start_bash(cli_ws, bot)
+                    await self.start_bash(cli_ws, int(nums[0]))
                     continue
 
                 # Execute commands
