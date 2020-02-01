@@ -15,6 +15,11 @@ in Python3.7. Communication is implemented using unencrypted websockets.
 
 ![](demo/demo-v1.gif)
 
+
+### Why?
+
+Developed as a part of an assignment in CTU class Introduction to Security
+
 ## Getting started
 
 ### Run via docker-compose
