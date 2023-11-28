@@ -19,5 +19,4 @@ setup(name='PythonBotnet',
       ],
       author='Martin Řepa',
       author_email='repa.martin@hotmail.com',
-      python_requires='>3.7.*',
 )
