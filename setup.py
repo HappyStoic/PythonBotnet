@@ -15,7 +15,7 @@ setup(name='PythonBotnet',
       install_requires=[
          'click==7.0',
          'ptable==0.9.2',
-         'websockets==9.1',
+         'websockets==11.0',
       ],
       author='Martin Řepa',
       author_email='repa.martin@hotmail.com',
